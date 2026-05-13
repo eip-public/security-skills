@@ -147,6 +147,17 @@ cve-identify-candidates
 
 Rule: ecosystem branches always beat class x OS fallback. Class x OS branches are loaded only when no ecosystem branch owns the target.
 
+## Handoff Credential Contract
+
+Every handoff that creates or discovers auth material (PATs, API tokens, session cookies, JWT tokens, admin credentials) MUST include them in the `PRIMARY_ARTIFACTS` field. Downstream skills (especially `cve-poc-validation`) should not have to re-authenticate.
+
+Accepted forms (in order of preference):
+1. Environment variable reference: `TARGET_TOKEN=...` in the lab's `.env` file
+2. Literal in the handoff block (lab-only, never in public reports)
+3. Instructions to re-create (last resort - costs downstream skills multiple calls)
+
+The research phase should create the credential once, and the handoff to the branch should carry it. The branch -> PoC handoff should carry it again. `cve-poc-validation` should never have to re-derive auth.
+
 ## Frontmatter contract
 
 Every SKILL.md MUST carry this frontmatter. Keys are required even if list values are empty ([]).
