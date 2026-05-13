@@ -118,9 +118,14 @@ Keep shared CVE lab examples under the canonical `~/exploit-intel/` layout.
 
 12. Resume Workflow
 When a user returns to work on an existing CVE lab:
-- Read `INTEL.md` at the active lab root first (`~/exploit-intel/labs/CVE-YYYY-NNNNN/INTEL.md`).
-- The `NEXT_BRANCH` field identifies which branch skill to reload. Skip `cve-router-triage` and `cve-research-analysis` unless `BLOCKERS` is non-empty or the user explicitly requests re-triage.
-- If no `INTEL.md` exists at the expected path, treat as a new CVE workflow starting at `cve-router-triage`.
+- Inspect the active lab root first (`~/exploit-intel/labs/CVE-YYYY-NNNNN/`) for `INTEL.md`, `report.md`, and `artifacts/poc_run.txt`.
+- Resume from the latest concrete workflow state:
+  - if `report.md` exists with a terminal verdict, treat the workflow as completed or blocked and summarize/report from there;
+  - if `artifacts/poc_run.txt` exists, resume with `cve-poc-validation` only if `report.md` is missing or incomplete;
+  - if `INTEL.md` exists, read it and use the `NEXT_BRANCH` field to identify which branch skill to reload.
+- Skip `cve-router-triage` and `cve-research-analysis` unless `BLOCKERS` is non-empty, the branch found stale/incomplete research intel, or the user explicitly requests re-triage.
+- If no `INTEL.md` exists at the expected path, check for `report.md` first; if it is a BLOCKED report, summarize it instead of restarting.
+- If neither `INTEL.md` nor a terminal/blocking `report.md` exists, treat as a new CVE workflow starting at `cve-router-triage`.
 - Do NOT re-run the full pipeline from scratch just because a new session has started.
 
 ## Canonical Security Flow
@@ -149,14 +154,14 @@ Rule: ecosystem branches always beat class x OS fallback. Class x OS branches ar
 
 ## Handoff Credential Contract
 
-Every handoff that creates or discovers auth material (PATs, API tokens, session cookies, JWT tokens, admin credentials) MUST include them in the `PRIMARY_ARTIFACTS` field. Downstream skills (especially `cve-poc-validation`) should not have to re-authenticate.
+Every handoff that creates or discovers auth material (PATs, API tokens, session cookies, JWT tokens, admin credentials) MUST include a reference to it in the `PRIMARY_ARTIFACTS` field. Downstream skills (especially `cve-poc-validation`) should not have to re-authenticate.
 
 Accepted forms (in order of preference):
-1. Environment variable reference: `TARGET_TOKEN=...` in the lab's `.env` file
-2. Literal in the handoff block (lab-only, never in public reports)
-3. Instructions to re-create (last resort - costs downstream skills multiple calls)
+1. Environment variable reference: `TARGET_TOKEN` / `TARGET_SESSION` backed by the lab's local `.env` file
+2. Local file reference under the lab root, e.g. `.env`, `artifacts/auth-notes.md`, or `lab/seeded-credentials.txt`
+3. Instructions to re-create the credential, only when no durable local reference exists
 
-The research phase should create the credential once, and the handoff to the branch should carry it. The branch -> PoC handoff should carry it again. `cve-poc-validation` should never have to re-derive auth.
+Internal lab-root artifacts, including `report.md`, may preserve exact auth material, tokens, keys, cookies, and secret-shaped values when they are necessary evidence. Do not paste live secrets into chat summaries, public/external writeups, or externally shared handoff text by default. The research phase should create the credential once, and later handoffs should carry the reference to it. `cve-poc-validation` should never have to re-derive auth.
 
 ## Frontmatter contract
 
@@ -214,11 +219,11 @@ VENDOR:              <string>
 PRODUCT:             <string>
 ECOSYSTEM:           wordpress | browser | kernel-linux | kernel-windows | mobile-android | none
 OS:                  linux | windows | macos | cross-platform
-VULN_CLASS:          memory | web | logic | deserialization | injection | xss | auth_bypass | lfi | ssrf | idor | xxe
+VULN_CLASS:          memory | web | logic | deserialization | injection | xss | auth_bypass | lfi | ssrf | idor | xxe | race | type_confusion | privilege_escalation | information_disclosure
 CWE:                 CWE-NNN[, CWE-NNN]
 VULNERABLE_VERSIONS: <range or list>
 FIXED_VERSION:       <version>
-SOURCE_AVAILABLE:    yes | no
+SOURCE_AVAILABLE:    yes | partial | no
 SOURCE_URL:          <repo url or n/a>
 VULNERABLE_COMMITS:  <sha or range or n/a>
 PATCH_COMMITS:       <sha or url or n/a>
@@ -238,6 +243,8 @@ NEXT_BRANCH:         <skill-slug>
 
 Domain branches may emit a superset block (for example `=== WORDPRESS CVE INTEL ===`) that adds ecosystem-specific fields.
 Branches treat any `n/a` as a trigger to ask the user, not assume.
+`SOURCE_AVAILABLE=partial` means symbols, decompiled code, patch fragments, generated source, or incomplete source are available and useful for analysis, but no complete public source repository is available.
+If source availability is `partial`, `SOURCE_URL` should point to the best available source-like artifact or be `n/a` with justification in `BLOCKERS`.
 
 ## Work Hygiene (canonical layout)
 
@@ -252,6 +259,7 @@ All work lives under:
         ├── README.md
         ├── INTEL.md                     # persisted CVE RESEARCH INTEL block
         ├── lab/
+        │   ├── .env                     # COMPOSE_PROJECT_NAME and lab-local env refs
         │   ├── Dockerfile
         │   ├── docker-compose.yml
         │   ├── seed.sh
@@ -271,9 +279,45 @@ All work lives under:
 Hard rules:
 - Never create files in ~/ or anywhere above ~/exploit-intel/.
 - One lab per CVE.
-- No .git/ directories anywhere under a lab.
+- Source checkouts may exist under `tmp/` during active research.
+- No `.git/` directories may remain under a lab after branch -> PoC handoff or finalization.
 - No ad-hoc dirs at any level.
-- tmp/ is scratch; deleted at branch -> PoC handoff including any .git/ or build caches.
+- `tmp/` is scratch; delete it at branch -> PoC handoff, including any `.git/` directories or build caches.
+
+## Docker lab naming
+
+Docker-owning branches build the lab, but all branches follow the same names.
+
+For every Docker-backed lab, create `lab/.env` with:
+
+```env
+COMPOSE_PROJECT_NAME=cve-yyyy-nnnnn-lab
+```
+
+Use the lowercase CVE slug for Docker objects: `cve-yyyy-nnnnn`, derived from `CVE-YYYY-NNNNN`.
+
+Compose rules:
+- Do not use fixed `container_name`; let Compose derive containers from `COMPOSE_PROJECT_NAME`.
+- Use short semantic service names: `web`, `smtp`, `db`, `redis`, `mail`, `callback`, `target`, `worker`.
+- Explicitly name every locally built image.
+- Single locally built target: `image: cve-yyyy-nnnnn-lab:local`.
+- Multiple locally built targets: `image: cve-yyyy-nnnnn-web:local`, `image: cve-yyyy-nnnnn-smtp:local`, `image: cve-yyyy-nnnnn-worker:local`, etc.
+- Third-party base images such as `postgres`, `mysql`, `redis`, or `wordpress` do not need renaming unless the lab builds a custom wrapper image.
+
+Example:
+
+```yaml
+services:
+  web:
+    build: .
+    image: cve-yyyy-nnnnn-web:local
+    ports:
+      - "8080:8080"
+
+  smtp:
+    build: ./smtp
+    image: cve-yyyy-nnnnn-smtp:local
+```
 
 Artifacts vs tmp:
 - artifacts/ is evidence of impact. Small, reviewable. Screenshots required when impact is visual.
