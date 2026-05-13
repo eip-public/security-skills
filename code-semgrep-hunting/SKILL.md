@@ -21,6 +21,12 @@ tags: [security, semgrep, static-analysis, vuln-hunting, taint-analysis]
 
 # Semgrep Vulnerability Hunting
 
+## Methodology note
+This skill uses the test-first Semgrep rule workflow common to public Semgrep
+and Trail of Bits security skills, adapted to this repository's CVE-routing
+style. Keep borrowed methodology small and practical; do not import broad
+ruleset catalogs unless the active task needs them.
+
 ## Routing doctrine reference
 Follow `../ROUTING-DOCTRINE.md` as the house style for:
 - branch vs helper ownership
@@ -36,7 +42,7 @@ Follow `../ROUTING-DOCTRINE.md` as the house style for:
 - Confirming variant analysis findings with a repeatable query
 
 ## When NOT to Use
-- Merely running existing community rulesets with no custom rule-development need (just run `semgrep --config auto .`)
+- Merely running existing community rulesets with no custom rule-development need.
 - Simple grep-style searches (use ripgrep instead - faster, zero setup)
 
 ## Router guidance
@@ -80,10 +86,12 @@ This skill's primary output is tested, repeatable Semgrep rule(s) plus a triaged
 ## Minimum Viable Path
 The shortest correct use of this skill is:
 1. start from an already understood pattern
-2. write vulnerable and safe tests first
-3. implement the smallest rule that matches the pattern
-4. run the tests until they pass cleanly
-5. run the rule against the target and triage the results
+2. check whether an existing rule already covers the pattern
+3. write vulnerable and safe tests first
+4. implement the smallest rule that matches the pattern
+5. run the tests until they pass cleanly
+6. run the rule against the target with `--metrics=off`
+7. triage the results manually before calling anything a finding
 
 ## Approach Selection
 
@@ -102,12 +110,13 @@ Taint mode only fires when untrusted data actually reaches the sink.
 
 ```
 [ ] Step 1: Understand the vuln class - what's the source? what's the sink?
-[ ] Step 2: Write test cases FIRST (vulnerable + safe examples)
-[ ] Step 3: Inspect AST if pattern matching - semgrep --dump-ast
-[ ] Step 4: Write the rule
-[ ] Step 5: Run semgrep --test - iterate until 100% pass
-[ ] Step 6: Run against target codebase
-[ ] Step 7: Triage results - true positives to artifacts/semgrep_findings.md
+[ ] Step 2: Check existing rules before writing a new one
+[ ] Step 3: Write test cases FIRST (vulnerable + safe examples)
+[ ] Step 4: Inspect AST if pattern matching - semgrep --dump-ast
+[ ] Step 5: Write the rule
+[ ] Step 6: Run semgrep --test with --metrics=off - iterate until 100% pass
+[ ] Step 7: Run against target codebase with --metrics=off
+[ ] Step 8: Triage results - true positives to artifacts/semgrep_findings.md
 ```
 
 ## Rule Structure
@@ -157,7 +166,7 @@ dangerous_sink(sanitized_input)
 dangerous_sink("hardcoded_safe_value")
 ```
 
-Run tests: `semgrep --test --config rule-id.yaml rule-id.py`
+Run tests: `semgrep --metrics=off --test --config rule-id.yaml rule-id.py`
 Must achieve 100% pass rate before running against target.
 
 ## Strictness Rules
@@ -165,6 +174,8 @@ Must achieve 100% pass rate before running against target.
 - Never use `languages: generic` - always target a specific language.
 - Never skip test cases. Untested rules have hidden false positives.
 - Taint mode for data flow. Pattern matching for structure only.
+- Use `--metrics=off` in every Semgrep command.
+- If the rule needs cross-file/interprocedural taint and Semgrep cannot model it reliably, hand off to `code-codeql-analysis` instead of faking precision.
 - No `todook` or `todoruleid` annotations.
 
 ## Anti-Patterns
@@ -189,13 +200,14 @@ pattern-sinks:
 ## Running Against a Target Codebase
 ```bash
 # Run your custom rule
-semgrep --config path/to/rule.yaml /path/to/target/
+semgrep --metrics=off --config path/to/rule.yaml /path/to/target/
 
 # Run with output to file
-semgrep --config path/to/rule.yaml --json /path/to/target/ > artifacts/semgrep_results.json
+semgrep --metrics=off --config path/to/rule.yaml --json /path/to/target/ > artifacts/semgrep_results.json
 
-# Quick scan with community rules first (good for initial recon)
-semgrep --config auto /path/to/target/ --severity ERROR
+# Optional quick scan with an explicit ruleset if useful for recon.
+# Avoid --config auto unless the user asked for registry-backed scanning.
+semgrep --metrics=off --config p/security-audit /path/to/target/ --severity ERROR
 ```
 
 ## Triage Output
