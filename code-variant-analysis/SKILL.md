@@ -21,6 +21,10 @@ tags: [security, cve, variant-hunting, semgrep, codeql, static-analysis]
 
 # Variant Analysis
 
+## Methodology note
+The exact-match-first and one-abstraction-at-a-time variant hunting flow is aligned with public
+variant-analysis guidance from Trail of Bits' security skills collection.
+
 ## Routing doctrine reference
 Follow `../ROUTING-DOCTRINE.md` as the house style for:
 - branch vs helper ownership
@@ -45,10 +49,11 @@ This skill's primary output is a triaged list of sibling candidate sites: other 
 ## Minimum Viable Path
 The shortest correct use of this skill is:
 1. state the root cause precisely
-2. search for the exact known instance first
-3. generalize one element at a time
-4. triage new matches manually
-5. write findings to `artifacts/variant_analysis.md`
+2. write a variant hypothesis before searching
+3. search for the exact known instance first
+4. generalize one element at a time
+5. triage new matches manually
+6. write findings and the search ledger to `artifacts/variant_analysis.md`
 
 ## Trigger threshold
 Load this skill only after the root cause is specific enough to search for.
@@ -106,12 +111,20 @@ Before searching, answer these precisely:
 - What conditions are required? (control flow, data flow, state)
 - What makes it exploitable? (user input reaches sink? missing check? wrong assumption?)
 
+Write a compact variant hypothesis before running broad searches:
+- **Invariant violated:** the security rule the original bug broke
+- **Must-have predicates:** conditions required for a true variant
+- **Non-variants:** similar-looking code that should NOT count
+- **Attacker control:** what input, role, or state must be controllable
+- **Impact boundary:** what impact would be proven if the variant is real
+
 ### Step 2: Exact Match First
 Start with a pattern that matches ONLY the known vulnerable instance:
 ```bash
 rg -n "exact_vulnerable_function_or_pattern" .
 ```
-Verify it returns exactly ONE result - the original. If not, your pattern is too broad.
+Verify it returns exactly ONE result - the original. If it returns multiple results, do not call
+them variants yet; classify each against the variant hypothesis before generalizing further.
 
 ### Step 3: Identify What to Abstract
 | Element | Keep Specific | Can Abstract |
@@ -127,6 +140,14 @@ Verify it returns exactly ONE result - the original. If not, your pattern is too
 3. Classify each: true positive or false positive?
 4. If FP rate is acceptable, generalize the next element
 5. If FP rate exceeds ~50%, revert and try a different abstraction
+
+Maintain a search ledger as you go:
+
+| Query | Abstraction changed | Scope | Matches | True candidates | False positives | Decision |
+|-------|---------------------|-------|---------|-----------------|-----------------|----------|
+| exact pattern | none | repo root | 1 | original | 0 | baseline |
+
+Do not discard failed searches. Failed abstractions explain why the final search strategy is narrow.
 
 ### Step 5: Triage Results
 For each match document:
@@ -146,6 +167,18 @@ For each match document:
 | Incomplete / unbuildable code | Semgrep | Works without a build |
 
 ## Common Pitfalls
+
+### Similar Sink Equals Same Bug
+A shared dangerous API or sink is not enough. A true variant must satisfy the same violated
+invariant and attacker-control predicates.
+
+### Patch-Only Tunnel Vision
+Patch diffs are good seeds, but variants often live outside the patched file or package. Search
+from the repo root unless the owning branch explicitly limits scope.
+
+### Reporting Search Hits as Findings
+Search hits are candidates. They become findings only after reachability, attacker control, and
+impact boundary are checked.
 
 ### Narrow Search Scope
 Bug found in `api/handlers/` → only searching that directory → missing variant in `utils/auth.py`
@@ -195,6 +228,8 @@ rules:
 ## Output
 Document findings in artifacts/variant_analysis.md:
 - Root cause summary
+- Variant hypothesis
 - Search queries used
+- Search ledger
 - Each match: location, confidence, exploitability, verdict
 - New CVE candidates (if any confirmed new instances found)

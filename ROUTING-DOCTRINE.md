@@ -319,6 +319,12 @@ services:
     image: cve-yyyy-nnnnn-smtp:local
 ```
 
+## External methodology references
+
+When a skill adopts a concrete workflow pattern from a public security skill, note the source near
+the relevant section in that skill. Keep attribution small and specific; do not add broad credits
+for generic security knowledge or expand skills with copied reference material.
+
 Artifacts vs tmp:
 - artifacts/ is evidence of impact. Small, reviewable. Screenshots required when impact is visual.
 - Debug-only files (pcaps, tcpdump, strace logs, heap dumps) stay in tmp/ and die at handoff. Exception: pcap IS the evidence for protocol-level vulns (rare).
