@@ -86,7 +86,7 @@ Examples:
 - `cve-windows-binary-diff`
   - when Microsoft/Windows patched and vulnerable PE images must be compared to identify the changed functions
 - `cve-windows-debug-lab`
-  - when a Windows target or driver needs WinDbg/KD/CDB-backed reproduction in the win11-forge lab
+  - any interaction with the win11-forge lab — provisioning, starting/stopping VMs, recovering an interrupted spawn, health-checking, OR WinDbg/KD/CDB-backed reproduction. Load before running any `virsh` / `setup.sh` command against the lab, not just before reproduction. Going straight to raw `virsh destroy` / `setup.sh lab spawn` without loading this skill first is the textbook routing failure.
 - `cve-windows-mitigation-bypass`
   - when a confirmed Windows primitive is blocked by CFG, CET, ASLR, DEP, HVCI, KASLR, SMEP, or pool hardening
 
