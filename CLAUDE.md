@@ -98,6 +98,21 @@ on. Don't break them.
    canonical `~/exploit-intel/labs/...`. Never bake a username or a
    real hostname into a skill.
 
+## Branch and PR workflow
+
+All changes go through a branch + PR. Never push to `main` directly.
+
+```bash
+git checkout -b <area>/<slug>   # e.g. feat/new-skill, fix/handoff-block, chore/update-routing
+# make changes
+git add <files>
+git commit -m "Short imperative subject"
+git push -u origin <area>/<slug>
+# open PR for review
+```
+
+Use `feat/` for new capability, `fix/` for bugs, `chore/` for maintenance/docs/cleanup, `scripts/` for one-off ops scripts.
+
 ## Validation before commit
 
 The repo has no validator script. Manual checklist:
